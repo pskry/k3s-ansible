@@ -8,13 +8,12 @@
     - role: download
     - role: raspberrypi
 
-- hosts: master
-  serial: 1
+- hosts: k3s_masters
   become: yes
   roles:
     - role: k3s/master
 
-- hosts: node
+- hosts: k3s_nodes
   become: yes
   roles:
     - role: k3s/node
