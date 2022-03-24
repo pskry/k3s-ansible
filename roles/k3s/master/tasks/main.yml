@@ -9,12 +9,18 @@
     group: root
     mode: 0644
 
-- name: Enable and check K3s service
+- name: Enable K3s service
+  service:
+    name: k3s
+    enabled: yes
+
+- name: (Re-)start K3s service
   systemd:
     name: k3s
     daemon_reload: yes
     state: restarted
     enabled: yes
+  when: k3s_service.changed
 
 - name: Wait for node-token
   wait_for:
@@ -44,6 +50,27 @@
     path: "{{ k3s_server_location }}/server/node-token"
     mode: "{{ p.stat.mode }}"
 
+- name: Create tempfile
+  register: k3s_tmp_kubecfg
+  tempfile:
+    state: file
+    suffix: kubecfg
+  changed_when: false
+
+- name: Copy config to tempfile
+  copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ k3s_tmp_kubecfg.path }}"
+    remote_src: yes
+  changed_when: false
+
+- name: Replace https://localhost:6443 by https://master-ip:6443
+  command: >-
+    k3s kubectl config set-cluster default
+      --server=https://{{ k3s_master_ip }}:6443
+      --kubeconfig {{ k3s_tmp_kubecfg.path }}
+  changed_when: false
+
 - name: Create directory .kube
   file:
     path: ~{{ ansible_user }}/.kube
@@ -51,20 +78,13 @@
     owner: "{{ ansible_user }}"
     mode: "u=rwx,g=rx,o="
 
-- name: Copy config file to user home directory
+- name: Copy modified config file (currently in tempfile) to user home directory
   copy:
-    src: /etc/rancher/k3s/k3s.yaml
+    src: "{{ k3s_tmp_kubecfg.path }}"
     dest: ~{{ ansible_user }}/.kube/config
     remote_src: yes
     owner: "{{ ansible_user }}"
     mode: "u=rw,g=,o="
-
-- name: Replace https://localhost:6443 by https://master-ip:6443
-  command: >-
-    k3s kubectl config set-cluster default
-      --server=https://{{ k3s_master_ip }}:6443
-      --kubeconfig ~{{ ansible_user }}/.kube/config
-  changed_when: true
 
 - name: Create kubectl symlink
   file:

@@ -1,6 +1,7 @@
 ---
 
 - name: Copy K3s service file
+  register: k3s_service
   template:
     src: "k3s.service.j2"
     dest: "{{ systemd_dir }}/k3s-node.service"
@@ -8,9 +9,15 @@
     group: root
     mode: 0755
 
-- name: Enable and check K3s service
+- name: Enable K3s service
+  service:
+    name: k3s-node
+    enabled: yes
+
+- name: (Re-)start K3s service
   systemd:
     name: k3s-node
     daemon_reload: yes
     state: restarted
     enabled: yes
+  when: k3s_service.changed
